@@ -1,4 +1,4 @@
-// +build IGNORE
+// +build !IGNORE
 
 /*
 Copyright IBM Corp. All Rights Reserved.
@@ -8,18 +8,20 @@ SPDX-License-Identifier: Apache-2.0
 package msp
 
 import (
-	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
 	"os"
 	"path/filepath"
+
+	"github.com/flyinox/crypto/x509"
+
+	"gopkg.in/yaml.v2"
 
 	"github.com/hyperledger/fabric/bccsp"
 	"github.com/hyperledger/fabric/bccsp/factory"
 	"github.com/hyperledger/fabric/common/tools/cryptogen/ca"
 	"github.com/hyperledger/fabric/common/tools/cryptogen/csp"
 	fabricmsp "github.com/hyperledger/fabric/msp"
-	"gopkg.in/yaml.v2"
 )
 
 const (
@@ -39,7 +41,7 @@ var nodeOUMap = map[int]string{
 }
 
 func GenerateLocalMSP(baseDir, name string, sans []string, signCA *ca.CA,
-	tlsCA *ca.CA, nodeType int, nodeOUs bool) error {
+	tlsCA *ca.CA, nodeType int, nodeOUs bool, sigAlgo, pluginPath string) error {
 
 	// create folder structure
 	mspDir := filepath.Join(baseDir, "msp")
@@ -62,7 +64,7 @@ func GenerateLocalMSP(baseDir, name string, sans []string, signCA *ca.CA,
 	keystore := filepath.Join(mspDir, "keystore")
 
 	// generate private key
-	priv, _, err := csp.GeneratePrivateKey(keystore)
+	priv, _, err := csp.GeneratePrivateKey(keystore, sigAlgo, pluginPath)
 	if err != nil {
 		return err
 	}
@@ -118,7 +120,7 @@ func GenerateLocalMSP(baseDir, name string, sans []string, signCA *ca.CA,
 	*/
 
 	// generate private key
-	tlsPrivKey, _, err := csp.GeneratePrivateKey(tlsDir)
+	tlsPrivKey, _, err := csp.GeneratePrivateKey(tlsDir, "ecdsa", "")
 	if err != nil {
 		return err
 	}

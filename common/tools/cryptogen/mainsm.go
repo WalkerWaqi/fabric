@@ -1,4 +1,4 @@
-// +build IGNORE
+// +build !IGNORE
 
 /*
 Copyright IBM Corp. All Rights Reserved.
@@ -205,6 +205,8 @@ var (
 	gen           = app.Command("generate", "Generate key material")
 	outputDir     = gen.Flag("output", "The output directory in which to place artifacts").Default("crypto-config").String()
 	genConfigFile = gen.Flag("config", "The configuration template to use").File()
+	sigAlgo       = gen.Flag("algo", "The signature algorithm, default sm2").Default("sm2").String()
+	pluginPath    = gen.Flag("pluginPath", "pluginPath represents bccsp plugin file path").Default("").String()
 
 	showtemplate = app.Command("showtemplate", "Show the default configuration template")
 
@@ -284,7 +286,7 @@ func extend() {
 	}
 
 	for _, orgSpec := range config.OrdererOrgs {
-		err = renderOrgSpec(&orgSpec, "orderer")
+		renderOrgSpec(&orgSpec, "orderer")
 		if err != nil {
 			fmt.Printf("Error processing orderer configuration: %s", err)
 			os.Exit(-1)
@@ -390,7 +392,7 @@ func generate() {
 	}
 
 	for _, orgSpec := range config.OrdererOrgs {
-		err = renderOrgSpec(&orgSpec, "orderer")
+		renderOrgSpec(&orgSpec, "orderer")
 		if err != nil {
 			fmt.Printf("Error processing orderer configuration: %s", err)
 			os.Exit(-1)
@@ -516,13 +518,13 @@ func generatePeerOrg(baseDir string, orgSpec OrgSpec) {
 	usersDir := filepath.Join(orgDir, "users")
 	adminCertsDir := filepath.Join(mspDir, "admincerts")
 	// generate signing CA
-	signCA, err := ca.NewCA(caDir, orgName, orgSpec.CA.CommonName, orgSpec.CA.Country, orgSpec.CA.Province, orgSpec.CA.Locality, orgSpec.CA.OrganizationalUnit, orgSpec.CA.StreetAddress, orgSpec.CA.PostalCode)
+	signCA, err := ca.NewCA(caDir, orgName, orgSpec.CA.CommonName, orgSpec.CA.Country, orgSpec.CA.Province, orgSpec.CA.Locality, orgSpec.CA.OrganizationalUnit, orgSpec.CA.StreetAddress, orgSpec.CA.PostalCode, *sigAlgo, *pluginPath)
 	if err != nil {
 		fmt.Printf("Error generating signCA for org %s:\n%v\n", orgName, err)
 		os.Exit(1)
 	}
 	// generate TLS CA
-	tlsCA, err := ca.NewCA(tlsCADir, orgName, "tls"+orgSpec.CA.CommonName, orgSpec.CA.Country, orgSpec.CA.Province, orgSpec.CA.Locality, orgSpec.CA.OrganizationalUnit, orgSpec.CA.StreetAddress, orgSpec.CA.PostalCode)
+	tlsCA, err := ca.NewCA(tlsCADir, orgName, "tls"+orgSpec.CA.CommonName, orgSpec.CA.Country, orgSpec.CA.Province, orgSpec.CA.Locality, orgSpec.CA.OrganizationalUnit, orgSpec.CA.StreetAddress, orgSpec.CA.PostalCode, "ecdsa", "")
 	if err != nil {
 		fmt.Printf("Error generating tlsCA for org %s:\n%v\n", orgName, err)
 		os.Exit(1)
@@ -603,7 +605,7 @@ func generateNodes(baseDir string, nodes []NodeSpec, signCA *ca.CA, tlsCA *ca.CA
 	for _, node := range nodes {
 		nodeDir := filepath.Join(baseDir, node.CommonName)
 		if _, err := os.Stat(nodeDir); os.IsNotExist(err) {
-			err := msp.GenerateLocalMSP(nodeDir, node.CommonName, node.SANS, signCA, tlsCA, nodeType, nodeOUs)
+			err := msp.GenerateLocalMSP(nodeDir, node.CommonName, node.SANS, signCA, tlsCA, nodeType, nodeOUs, *sigAlgo, *pluginPath)
 			if err != nil {
 				fmt.Printf("Error generating local MSP for %s:\n%v\n", node, err)
 				os.Exit(1)
@@ -625,13 +627,13 @@ func generateOrdererOrg(baseDir string, orgSpec OrgSpec) {
 	usersDir := filepath.Join(orgDir, "users")
 	adminCertsDir := filepath.Join(mspDir, "admincerts")
 	// generate signing CA
-	signCA, err := ca.NewCA(caDir, orgName, orgSpec.CA.CommonName, orgSpec.CA.Country, orgSpec.CA.Province, orgSpec.CA.Locality, orgSpec.CA.OrganizationalUnit, orgSpec.CA.StreetAddress, orgSpec.CA.PostalCode)
+	signCA, err := ca.NewCA(caDir, orgName, orgSpec.CA.CommonName, orgSpec.CA.Country, orgSpec.CA.Province, orgSpec.CA.Locality, orgSpec.CA.OrganizationalUnit, orgSpec.CA.StreetAddress, orgSpec.CA.PostalCode, *sigAlgo, *pluginPath)
 	if err != nil {
 		fmt.Printf("Error generating signCA for org %s:\n%v\n", orgName, err)
 		os.Exit(1)
 	}
 	// generate TLS CA
-	tlsCA, err := ca.NewCA(tlsCADir, orgName, "tls"+orgSpec.CA.CommonName, orgSpec.CA.Country, orgSpec.CA.Province, orgSpec.CA.Locality, orgSpec.CA.OrganizationalUnit, orgSpec.CA.StreetAddress, orgSpec.CA.PostalCode)
+	tlsCA, err := ca.NewCA(tlsCADir, orgName, "tls"+orgSpec.CA.CommonName, orgSpec.CA.Country, orgSpec.CA.Province, orgSpec.CA.Locality, orgSpec.CA.OrganizationalUnit, orgSpec.CA.StreetAddress, orgSpec.CA.PostalCode, "ecdsa", "")
 	if err != nil {
 		fmt.Printf("Error generating tlsCA for org %s:\n%v\n", orgName, err)
 		os.Exit(1)
