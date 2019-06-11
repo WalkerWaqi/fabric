@@ -8,7 +8,6 @@ package comm
 
 import (
 	"bytes"
-	"crypto/tls"
 	"encoding/hex"
 	"fmt"
 	"net"
@@ -25,9 +24,10 @@ import (
 	"github.com/op/go-logging"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
+	tls "github.com/tjfoc/gmtls"
+	credentials "github.com/tjfoc/gmtls/gmcredentials"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
 )
 

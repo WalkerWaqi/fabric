@@ -115,13 +115,13 @@ pkgmap.block-listener := $(PKGNAME)/examples/events/block-listener
 
 include docker-env.mk
 
-all: native docker checks
+all: native docker
 
-checks: license spelling linter unit-test behave
+checks: spelling linter unit-test behave
 
-basic-checks: license spelling linter
+basic-checks: spelling linter
 
-desk-check: license spelling linter verify behave
+desk-check: spelling linter verify behave
 
 # Pull thirdparty docker images based on the latest baseimage release version
 .PHONY: docker-thirdparty
@@ -139,7 +139,6 @@ spelling:
 
 .PHONY: license
 license:
-	@scripts/check_license.sh
 
 .PHONY: gotools
 gotools:
@@ -252,8 +251,8 @@ build/docker/gotools: gotools/Makefile
 		make install BINDIR=/opt/gotools/bin OBJDIR=/opt/gotools/obj
 
 # Both peer and peer-docker depend on ccenv and javaenv (all docker env images it supports).
-build/bin/peer: build/image/ccenv/$(DUMMY) build/image/javaenv/$(DUMMY)
-build/image/peer/$(DUMMY): build/image/ccenv/$(DUMMY) build/image/javaenv/$(DUMMY)
+build/bin/peer: build/image/ccenv/$(DUMMY)
+build/image/peer/$(DUMMY): build/image/ccenv/$(DUMMY)
 
 build/bin/%: $(PROJECT_FILES)
 	@mkdir -p $(@D)
