@@ -7,8 +7,6 @@ SPDX-License-Identifier: Apache-2.0
 package comm
 
 import (
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
@@ -19,6 +17,9 @@ import (
 
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/core/config"
+	"github.com/tjfoc/gmsm/sm2"
+	tls "github.com/tjfoc/gmtls"
+	"github.com/tjfoc/gmtls/gmcredentials"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -129,7 +130,7 @@ func (cs *CredentialSupport) GetDeliverServiceCredentials(channelID string) (cre
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{cs.clientCert},
 	}
-	certPool := x509.NewCertPool()
+	certPool := sm2.NewCertPool()
 
 	rootCACerts, exists := cs.OrdererRootCAsByChain[channelID]
 	if !exists {
@@ -140,7 +141,7 @@ func (cs *CredentialSupport) GetDeliverServiceCredentials(channelID string) (cre
 	for _, cert := range rootCACerts {
 		block, _ := pem.Decode(cert)
 		if block != nil {
-			cert, err := x509.ParseCertificate(block.Bytes)
+			cert, err := sm2.ParseCertificate(block.Bytes)
 			if err == nil {
 				certPool.AddCert(cert)
 			} else {
@@ -151,7 +152,7 @@ func (cs *CredentialSupport) GetDeliverServiceCredentials(channelID string) (cre
 		}
 	}
 	tlsConfig.RootCAs = certPool
-	creds = credentials.NewTLS(tlsConfig)
+	creds = gmcredentials.NewTLS(tlsConfig)
 	return creds, nil
 }
 
@@ -162,7 +163,7 @@ func (cs *CredentialSupport) GetPeerCredentials() credentials.TransportCredentia
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{cs.clientCert},
 	}
-	certPool := x509.NewCertPool()
+	certPool := sm2.NewCertPool()
 	// loop through the server root CAs
 	roots, _ := cs.GetServerRootCAs()
 	for _, root := range roots {
@@ -172,7 +173,7 @@ func (cs *CredentialSupport) GetPeerCredentials() credentials.TransportCredentia
 		}
 	}
 	tlsConfig.RootCAs = certPool
-	creds = credentials.NewTLS(tlsConfig)
+	creds = gmcredentials.NewTLS(tlsConfig)
 	return creds
 }
 
@@ -234,11 +235,11 @@ func InitTLSForShim(key, certStr string) credentials.TransportCredentials {
 	if err != nil {
 		commLogger.Panicf("failed loading root ca cert: %v", err)
 	}
-	cp := x509.NewCertPool()
+	cp := sm2.NewCertPool()
 	if !cp.AppendCertsFromPEM(b) {
 		commLogger.Panicf("failed to append certificates")
 	}
-	return credentials.NewTLS(&tls.Config{
+	return gmcredentials.NewTLS(&tls.Config{
 		Certificates: []tls.Certificate{cert},
 		RootCAs:      cp,
 		ServerName:   sn,
