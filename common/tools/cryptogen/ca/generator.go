@@ -135,6 +135,7 @@ func (ca *CA) SignCertificate(baseDir, name string, ous, sans []string, pub *sm2
 	// 	pub, ca.Signer)
 
 	sm2Tpl := gm.ParseX509Certificate2Sm2(&template)
+	sm2Tpl.PublicKey = pub
 	cert, err := genCertificateGMSM2(baseDir, name, sm2Tpl, ca.SignSm2Cert, pub, ca.Sm2Key)
 
 	if err != nil {
