@@ -1,219 +1,221 @@
-/*
-Copyright Suzhou Tongji Fintech Research Institute 2017 All Rights Reserved.
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+// Copyright 2011 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
 
-                 http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
+// Package sm2 implements china crypto standards.
 package sm2
 
 import (
+	"bytes"
+	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/x509/pkix"
-	"encoding/asn1"
+	"encoding/hex"
 	"fmt"
-	"io/ioutil"
-	"log"
+	"io"
 	"math/big"
-	"net"
-	"os"
 	"testing"
-	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/tjfoc/gmsm/sm3"
 )
 
-func TestSm2(t *testing.T) {
-	priv, err := GenerateKey() // 生成密钥对
+func TestSignVerify(t *testing.T) {
+	msg := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
+	priv, err := GenerateKey(rand.Reader)
 	if err != nil {
-		log.Fatal(err)
+		panic("GenerateKey failed")
 	}
-	fmt.Printf("%v\n", priv.Curve.IsOnCurve(priv.X, priv.Y)) // 验证是否为sm2的曲线
-	pub := &priv.PublicKey
-	msg := []byte("123456")
-	d0, err := pub.Encrypt(msg)
+
+	hfunc := sm3.New()
+	hfunc.Write(msg)
+	hash := hfunc.Sum(nil)
+
+	r, s, err := Sign(rand.Reader, priv, hash)
 	if err != nil {
-		fmt.Printf("Error: failed to encrypt %s: %v\n", msg, err)
+		panic(err)
+	}
+
+	ret := Verify(&priv.PublicKey, hash, r, s)
+	fmt.Println(ret)
+}
+
+func TestBase(t *testing.T) {
+	msg := []byte{1, 2, 3, 4}
+	priv, err := GenerateKey(rand.Reader)
+	if err != nil {
+		panic("GenerateKey failed")
+	}
+	fmt.Printf("D:%s\n", priv.D.Text(16))
+	fmt.Printf("X:%s\n", priv.X.Text(16))
+	fmt.Printf("Y:%s\n", priv.Y.Text(16))
+
+	hfunc := sm3.New()
+	hfunc.Write(msg)
+	hash := hfunc.Sum(nil)
+	fmt.Printf("hash:%02X\n", hash)
+	var done = make(chan struct{})
+	go func() {
+		for i := 0; ; i += 1 {
+			sig, err := priv.Sign(rand.Reader, hash, nil)
+			if err != nil {
+				panic(err)
+			}
+			if len(sig) == 73 {
+				fmt.Println("found it")
+				done <- struct{}{}
+				break
+			}
+			if i%100 == 0 {
+				break
+			}
+		}
+	}()
+
+	r, s, err := Sign(rand.Reader, priv, hash)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("R:%s\n", r.Text(16))
+	fmt.Printf("S:%s\n", s.Text(16))
+
+	ret := Verify(&priv.PublicKey, hash, r, s)
+	fmt.Println(ret)
+	<-done
+}
+
+func TestKeyGeneration(t *testing.T) {
+	priv, err := GenerateKey(rand.Reader)
+	if err != nil {
+		t.Errorf("error: %s", err)
 		return
 	}
-	fmt.Printf("Cipher text = %v\n", d0)
-	d1, err := priv.Decrypt(d0)
-	if err != nil {
-		fmt.Printf("Error: failed to decrypt: %v\n", err)
-	}
-	fmt.Printf("clear text = %s\n", d1)
-	ok, err := WritePrivateKeytoPem("priv.pem", priv, nil) // 生成密钥文件
-	if ok != true {
-		log.Fatal(err)
-	}
-	pubKey, _ := priv.Public().(*PublicKey)
-	ok, err = WritePublicKeytoPem("pub.pem", pubKey, nil) // 生成公钥文件
-	if ok != true {
-		log.Fatal(err)
-	}
-	msg = []byte("test")
-	err = ioutil.WriteFile("ifile", msg, os.FileMode(0644)) // 生成测试文件
-	if err != nil {
-		log.Fatal(err)
-	}
-	privKey, err := ReadPrivateKeyFromPem("priv.pem", nil) // 读取密钥
-	if err != nil {
-		log.Fatal(err)
-	}
-	pubKey, err = ReadPublicKeyFromPem("pub.pem", nil) // 读取公钥
-	if err != nil {
-		log.Fatal(err)
-	}
-	msg, _ = ioutil.ReadFile("ifile")                // 从文件读取数据
-	sign, err := privKey.Sign(rand.Reader, msg, nil) // 签名
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = ioutil.WriteFile("ofile", sign, os.FileMode(0644))
-	if err != nil {
-		log.Fatal(err)
-	}
-	signdata, _ := ioutil.ReadFile("ofile")
-	ok = privKey.Verify(msg, signdata) // 密钥验证
-	if ok != true {
-		fmt.Printf("Verify error\n")
-	} else {
-		fmt.Printf("Verify ok\n")
-	}
-	ok = pubKey.Verify(msg, signdata) // 公钥验证
-	if ok != true {
-		fmt.Printf("Verify error\n")
-	} else {
-		fmt.Printf("Verify ok\n")
-	}
-	templateReq := CertificateRequest{
-		Subject: pkix.Name{
-			CommonName:   "test.example.com",
-			Organization: []string{"Test"},
-		},
-		//		SignatureAlgorithm: ECDSAWithSHA256,
-		SignatureAlgorithm: SM2WithSM3,
-	}
-	_, err = CreateCertificateRequestToPem("req.pem", &templateReq, privKey)
-	if err != nil {
-		log.Fatal(err)
-	}
-	req, err := ReadCertificateRequestFromPem("req.pem")
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = req.CheckSignature()
-	if err != nil {
-		log.Fatal(err)
-	} else {
-		fmt.Printf("CheckSignature ok\n")
-	}
-	testExtKeyUsage := []ExtKeyUsage{ExtKeyUsageClientAuth, ExtKeyUsageServerAuth}
-	testUnknownExtKeyUsage := []asn1.ObjectIdentifier{[]int{1, 2, 3}, []int{2, 59, 1}}
-	extraExtensionData := []byte("extra extension")
-	commonName := "test.example.com"
-	template := Certificate{
-		// SerialNumber is negative to ensure that negative
-		// values are parsed. This is due to the prevalence of
-		// buggy code that produces certificates with negative
-		// serial numbers.
-		SerialNumber: big.NewInt(-1),
-		Subject: pkix.Name{
-			CommonName:   commonName,
-			Organization: []string{"TEST"},
-			Country:      []string{"China"},
-			ExtraNames: []pkix.AttributeTypeAndValue{
-				{
-					Type:  []int{2, 5, 4, 42},
-					Value: "Gopher",
-				},
-				// This should override the Country, above.
-				{
-					Type:  []int{2, 5, 4, 6},
-					Value: "NL",
-				},
-			},
-		},
-		NotBefore: time.Unix(1000, 0),
-		NotAfter:  time.Unix(100000, 0),
 
-		//		SignatureAlgorithm: ECDSAWithSHA256,
-		SignatureAlgorithm: SM2WithSM3,
-
-		SubjectKeyId: []byte{1, 2, 3, 4},
-		KeyUsage:     KeyUsageCertSign,
-
-		ExtKeyUsage:        testExtKeyUsage,
-		UnknownExtKeyUsage: testUnknownExtKeyUsage,
-
-		BasicConstraintsValid: true,
-		IsCA: true,
-
-		OCSPServer:            []string{"http://ocsp.example.com"},
-		IssuingCertificateURL: []string{"http://crt.example.com/ca1.crt"},
-
-		DNSNames:       []string{"test.example.com"},
-		EmailAddresses: []string{"gopher@golang.org"},
-		IPAddresses:    []net.IP{net.IPv4(127, 0, 0, 1).To4(), net.ParseIP("2001:4860:0:2001::68")},
-
-		PolicyIdentifiers:   []asn1.ObjectIdentifier{[]int{1, 2, 3}},
-		PermittedDNSDomains: []string{".example.com", "example.com"},
-
-		CRLDistributionPoints: []string{"http://crl1.example.com/ca1.crl", "http://crl2.example.com/ca1.crl"},
-
-		ExtraExtensions: []pkix.Extension{
-			{
-				Id:    []int{1, 2, 3, 4},
-				Value: extraExtensionData,
-			},
-			// This extension should override the SubjectKeyId, above.
-			{
-				Id:       oidExtensionSubjectKeyId,
-				Critical: false,
-				Value:    []byte{0x04, 0x04, 4, 3, 2, 1},
-			},
-		},
-	}
-	pubKey, _ = priv.Public().(*PublicKey)
-	ok, _ = CreateCertificateToPem("cert.pem", &template, &template, pubKey, privKey)
-	if ok != true {
-		fmt.Printf("failed to create cert file\n")
-	}
-	cert, err := ReadCertificateFromPem("cert.pem")
-	if err != nil {
-		fmt.Printf("failed to read cert file")
-	}
-	err = cert.CheckSignature(cert.SignatureAlgorithm, cert.RawTBSCertificate, cert.Signature)
-	if err != nil {
-		log.Fatal(err)
-	} else {
-		fmt.Printf("CheckSignature ok\n")
+	if !priv.PublicKey.Curve.IsOnCurve(priv.PublicKey.X, priv.PublicKey.Y) {
+		t.Errorf("public key invalid: %s", err)
 	}
 }
 
-func BenchmarkSM2(t *testing.B) {
-	t.ReportAllocs()
-	for i := 0; i < t.N; i++ {
-		priv, err := GenerateKey() // 生成密钥对
-		if err != nil {
-			log.Fatal(err)
-		}
-		msg := []byte("test")
-		sign, err := priv.Sign(rand.Reader, msg, nil) // 签名
-		if err != nil {
-			log.Fatal(err)
-		}
-		ok := priv.Verify(msg, sign) // 密钥验证
-		if ok != true {
-			fmt.Printf("Verify error\n")
-		} else {
-			fmt.Printf("Verify ok\n")
-		}
+func BenchmarkSign(b *testing.B) {
+	b.ResetTimer()
+	origin := []byte("testing")
+	hashed := sm3.SumSM3(origin)
+	priv, _ := GenerateKey(rand.Reader)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _, _ = Sign(rand.Reader, priv, hashed[:])
+	}
+}
+
+func TestSignAndVerify(t *testing.T) {
+	priv, _ := GenerateKey(rand.Reader)
+
+	origin := []byte("testintestintestintestintestintestinggggggtesting")
+	hash := sm3.New()
+	hash.Write(origin)
+	hashed := hash.Sum(nil)
+	r, s, err := Sign(rand.Reader, priv, hashed)
+	if err != nil {
+		t.Errorf(" error signing: %s", err)
+		return
+	}
+
+	if !Verify(&priv.PublicKey, hashed, r, s) {
+		t.Errorf(" Verify failed")
+	}
+
+	//hashed[0] ^= 0xff
+	hashed[0] = 0x53
+	for i := 0; i < len(hashed); i++ {
+		hashed[i] = byte(i)
+	}
+	if Verify(&priv.PublicKey, hashed, r, s) {
+		t.Errorf("Verify always works!")
+	}
+}
+
+func TestKDF(t *testing.T) {
+	x2, err := hex.DecodeString("64D20D27D0632957F8028C1E024F6B02EDF23102A566C932AE8BD613A8E865FE")
+	if err != nil {
+		t.Fatalf("%s", err.Error())
+	}
+	y2, err := hex.DecodeString("58D225ECA784AE300A81A2D48281A828E1CEDF11C4219099840265375077BF78")
+	if err != nil {
+		t.Fatalf("%s", err.Error())
+	}
+	expect, err := hex.DecodeString("006E30DAE231B071DFAD8AA379E90264491603")
+	klen := 152
+	actual := keyDerivation(append(x2, y2...), klen)
+	assert.Equal(t, expect, actual)
+}
+
+func TestENC_GMT_EX1(t *testing.T) {
+	p256Sm2ParamsTest := &elliptic.CurveParams{Name: "SM2-P-256-TEST"} // 注明为SM2
+	//SM2椭	椭 圆 曲 线 公 钥 密 码 算 法 推 荐 曲 线 参 数
+	p256Sm2ParamsTest.P, _ = new(big.Int).SetString("8542D69E4C044F18E8B92435BF6FF7DE457283915C45517D722EDB8B08F1DFC3", 16)
+	p256Sm2ParamsTest.N, _ = new(big.Int).SetString("8542D69E4C044F18E8B92435BF6FF7DD297720630485628D5AE74EE7C32E79B7", 16)
+	p256Sm2ParamsTest.B, _ = new(big.Int).SetString("63E4C6D3B23B0C849CF84241484BFE48F61D59A5B16BA06E6E12D1DA27C5249A", 16)
+	p256Sm2ParamsTest.Gx, _ = new(big.Int).SetString("421DEBD61B62EAB6746434EBC3CC315E32220B3BADD50BDC4C4E6C147FEDD43D", 16)
+	p256Sm2ParamsTest.Gy, _ = new(big.Int).SetString("0680512BCBB42C07D47349D2153B70C4E5D7FDFCBFA36EA1A85841B9E46E09A2", 16)
+	p256Sm2ParamsTest.BitSize = 256
+
+	p256sm2CurveTest := p256Curve{p256Sm2ParamsTest}
+
+	generateRandK = func(rand io.Reader, c elliptic.Curve) (k *big.Int) {
+		k, _ = new(big.Int).SetString("4C62EEFD6ECFC2B95B92FD6C3D9575148AFA17425546D49018E5388D49DD7B4F", 16)
+		return k
+	}
+	expectA, _ := new(big.Int).SetString("787968B4FA32C3FD2417842E73BBFEFF2F3C848B6831D7E0EC65228B3937E498", 16)
+	Gy2 := p256sm2CurveTest.Gy.Mul(p256sm2CurveTest.Gy, p256sm2CurveTest.Gy)
+	gx := new(big.Int).SetBytes(p256sm2CurveTest.Gx.Bytes())
+	Gx2 := gx.Mul(p256sm2CurveTest.Gx, p256sm2CurveTest.Gx)
+	Gx3 := gx.Mul(Gx2, p256sm2CurveTest.Gx)
+	A := Gy2.Sub(Gy2, Gx3)
+	A = A.Sub(A, p256sm2CurveTest.B)
+	A = A.Div(A, p256sm2CurveTest.Gx)
+	assert.Equal(t, expectA.Bytes(), A.Bytes())
+
+	expectX, _ := new(big.Int).SetString("435B39CCA8F3B508C1488AFC67BE491A0F7BA07E581A0E4849A5CF70628A7E0A", 16)
+	expectY, _ := new(big.Int).SetString("75DDBA78F15FEECB4C7895E2C1CDF5FE01DEBB2CDBADF45399CCF77BBA076A42", 16)
+	priv := &PrivateKey{}
+	priv.PublicKey.Curve = p256sm2CurveTest
+	priv.D, _ = new(big.Int).SetString("1649AB77A00637BD5E2EFE283FBF353534AA7F7CB89463F208DDBC2920BB0DA0", 16)
+	priv.PublicKey.X, priv.PublicKey.Y = p256sm2CurveTest.ScalarBaseMult(priv.D.Bytes())
+	assert.True(t, p256sm2CurveTest.IsOnCurve(expectX, expectY))
+
+	//assert.Equal(t, expectX.Bytes(), priv.PublicKey.X.Bytes())
+	//assert.Equal(t, expectY.Bytes(), priv.PublicKey.Y.Bytes())
+}
+
+func TestCryptoToolCompare(t *testing.T) {
+	generateRandK = func(rand io.Reader, c elliptic.Curve) (k *big.Int) {
+		k, _ = new(big.Int).SetString("88E0271D16363C00D6456E151C095BAD4B75968E708234A9762146711D327FF3", 16)
+		return
+	}
+	priv := &PrivateKey{}
+	priv.PublicKey.Curve = P256Sm2()
+	priv.D, _ = new(big.Int).SetString("88E0271D16363C00D6456E151C095BAD4B75968E708234A9762146711D327FF3", 16)
+	priv.PublicKey.X, priv.PublicKey.Y = priv.PublicKey.ScalarBaseMult(priv.D.Bytes())
+
+	msg, _ := hex.DecodeString("88E0271D16363C00D6456E151C095BAD4B75968E708234A9762146711D327FF3")
+	Encrypt(rand.Reader, msg, &priv.PublicKey)
+}
+
+func TestEnc(t *testing.T) {
+	priv, _ := GenerateKey(rand.Reader)
+	var msg = "asdfasdf"
+
+	enc, err := Encrypt(rand.Reader, []byte(msg), &priv.PublicKey)
+	if err != nil {
+		t.Fatalf("encrypt failed : %s", err.Error())
+	}
+	dec, err := Decrypt(enc, priv)
+	if err != nil {
+		t.Fatalf("dec failed : %s", err.Error())
+	}
+
+	if !bytes.Equal([]byte(msg), dec) {
+		t.Error("enc-dec failed")
 	}
 }

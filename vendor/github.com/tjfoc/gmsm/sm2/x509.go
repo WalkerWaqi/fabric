@@ -1032,7 +1032,7 @@ func checkSignature(algo SignatureAlgorithm, signed, signature []byte, publicKey
 				Curve: pub.Curve,
 				X:     pub.X,
 				Y:     pub.Y,
-			}, digest, ecdsaSig.R, ecdsaSig.S) {
+			}, signed, ecdsaSig.R, ecdsaSig.S) {
 				return errors.New("x509: SM2 verification failure")
 			}
 		default:
@@ -1958,7 +1958,6 @@ func CreateCertificate(rand io.Reader, template, parent *Certificate, pub, priv 
 
 	h := hashFunc.New()
 	h.Write(tbsCertContents)
-	digest := h.Sum(nil)
 
 	var signerOpts crypto.SignerOpts
 	signerOpts = hashFunc
@@ -1970,7 +1969,7 @@ func CreateCertificate(rand io.Reader, template, parent *Certificate, pub, priv 
 	}
 
 	var signature []byte
-	signature, err = key.Sign(rand, digest, signerOpts)
+	signature, err = key.Sign(rand, tbsCertContents, signerOpts)
 	if err != nil {
 		return
 	}
@@ -2062,10 +2061,9 @@ func (c *Certificate) CreateCRL(rand io.Reader, priv interface{}, revokedCerts [
 
 	h := hashFunc.New()
 	h.Write(tbsCertListContents)
-	digest := h.Sum(nil)
 
 	var signature []byte
-	signature, err = key.Sign(rand, digest, hashFunc)
+	signature, err = key.Sign(rand, tbsCertListContents, hashFunc)
 	if err != nil {
 		return
 	}
@@ -2341,10 +2339,9 @@ func CreateCertificateRequest(rand io.Reader, template *CertificateRequest, priv
 
 	h := hashFunc.New()
 	h.Write(tbsCSRContents)
-	digest := h.Sum(nil)
 
 	var signature []byte
-	signature, err = key.Sign(rand, digest, hashFunc)
+	signature, err = key.Sign(rand, tbsCSRContents, hashFunc)
 	if err != nil {
 		return
 	}
@@ -2376,7 +2373,7 @@ func ParseCertificateRequest(asn1Data []byte) (*CertificateRequest, error) {
 
 func parseCertificateRequest(in *certificateRequest) (*CertificateRequest, error) {
 	out := &CertificateRequest{
-		Raw: in.Raw,
+		Raw:                      in.Raw,
 		RawTBSCertificateRequest: in.TBSCSR.Raw,
 		RawSubjectPublicKeyInfo:  in.TBSCSR.PublicKey.Raw,
 		RawSubject:               in.TBSCSR.Subject.FullBytes,
