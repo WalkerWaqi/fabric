@@ -26,7 +26,6 @@ import (
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/tjfoc/gmsm/sm3"
 	"golang.org/x/crypto/sha3"
-	"fmt"
 )
 
 var (
@@ -308,8 +307,8 @@ func (csp *impl) Verify(k bccsp.Key, signature, digest []byte, opts bccsp.Signer
 	if !found {
 		return false, errors.ErrorWithCallstack(errors.BCCSP, errors.NotFound, "Unsupported 'VerifyKey' provided [%T]", k)
 	}
-	fmt.Println("-----------Verify impl function---------")
-	fmt.Println(verifier)
+	// fmt.Println("-----------Verify impl function---------")
+	// fmt.Println(verifier)
 
 	valid, err = verifier.Verify(k, signature, digest, opts)
 	if err != nil {
