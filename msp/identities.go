@@ -62,7 +62,7 @@ func newIdentity(cert *sm2.Certificate, pk bccsp.Key, msp *bccspmsp) (Identity, 
 	// Compute identity identifier
 
 	// Use the hash of the identity's certificate as id in the IdentityIdentifier
-	hashOpt, err := bccsp.GetHashOpt(msp.cryptoConfig.IdentityIdentifierHashFunction)
+	hashOpt, err := bccsp.GetHashOpt(bccsp.GMSM3)
 	if err != nil {
 		return nil, errors.WithMessage(err, "failed getting hash function options")
 	}
@@ -150,7 +150,7 @@ func (id *identity) Verify(msg []byte, sig []byte) error {
 	// mspIdentityLogger.Infof("Verifying signature")
 
 	// Compute Hash
-	hashOpt, err := id.getHashOpt(id.msp.cryptoConfig.SignatureHashFamily)
+	hashOpt, err := id.getHashOpt(bccsp.GMSM3)
 	if err != nil {
 		return errors.WithMessage(err, "failed getting hash function options")
 	}
@@ -165,7 +165,7 @@ func (id *identity) Verify(msg []byte, sig []byte) error {
 		mspIdentityLogger.Debugf("Verify: sig = %s", hex.Dump(sig))
 	}
 
-	valid, err := id.msp.bccsp.Verify(id.pk, sig, digest, nil)
+	valid, err := id.msp.bccsp.Verify(id.pk, sig, msg, nil)
 	if err != nil {
 		return errors.WithMessage(err, "could not determine the validity of the signature")
 	} else if !valid {
@@ -201,6 +201,8 @@ func (id *identity) getHashOpt(hashFamily string) (bccsp.HashOpts, error) {
 		return bccsp.GetHashOpt(bccsp.SHA256)
 	case bccsp.SHA3:
 		return bccsp.GetHashOpt(bccsp.SHA3_256)
+	case bccsp.GMSM3:
+		return bccsp.GetHashOpt(bccsp.GMSM3)
 	}
 	return nil, errors.Errorf("hash familiy not recognized [%s]", hashFamily)
 }
@@ -227,7 +229,7 @@ func (id *signingidentity) Sign(msg []byte) ([]byte, error) {
 	//mspIdentityLogger.Infof("Signing message")
 
 	// Compute Hash
-	hashOpt, err := id.getHashOpt(id.msp.cryptoConfig.SignatureHashFamily)
+	hashOpt, err := id.getHashOpt(bccsp.GMSM3)
 	if err != nil {
 		return nil, errors.WithMessage(err, "failed getting hash function options")
 	}
@@ -245,9 +247,7 @@ func (id *signingidentity) Sign(msg []byte) ([]byte, error) {
 	mspIdentityLogger.Debugf("Sign: digest: %X \n", digest)
 
 	// Sign
-	signData, err := id.signer.Sign(rand.Reader, digest, nil)
-	//return id.signer.Sign(rand.Reader, digest, nil)
-	return signData, err
+	return id.signer.Sign(rand.Reader, msg, nil)
 }
 
 func (id *signingidentity) GetPublicVersion() Identity {
