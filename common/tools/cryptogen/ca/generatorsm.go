@@ -1,4 +1,4 @@
-// +build IGNORE
+// +build !IGNORE
 
 /*
 Copyright IBM Corp. All Rights Reserved.
@@ -9,9 +9,7 @@ package ca
 
 import (
 	"crypto"
-	"crypto/ecdsa"
 	"crypto/rand"
-	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"io/ioutil"
@@ -22,7 +20,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hyperledger/fabric/bccsp/utils"
+	"github.com/flyinox/crypto/x509"
+
 	"github.com/hyperledger/fabric/common/tools/cryptogen/csp"
 )
 
@@ -41,14 +40,14 @@ type CA struct {
 
 // NewCA creates an instance of CA and saves the signing key pair in
 // baseDir/name
-func NewCA(baseDir, org, name, country, province, locality, orgUnit, streetAddress, postalCode string) (*CA, error) {
+func NewCA(baseDir, org, name, country, province, locality, orgUnit, streetAddress, postalCode, sigAlgo, pluginPath string) (*CA, error) {
 
 	var response error
 	var ca *CA
 
 	err := os.MkdirAll(baseDir, 0755)
 	if err == nil {
-		priv, signer, err := csp.GeneratePrivateKey(baseDir)
+		priv, signer, err := csp.GeneratePrivateKey(baseDir, sigAlgo, pluginPath)
 		response = err
 		if err == nil {
 			// get public signing certificate
@@ -95,7 +94,7 @@ func NewCA(baseDir, org, name, country, province, locality, orgUnit, streetAddre
 
 // SignCertificate creates a signed certificate based on a built-in template
 // and saves it in baseDir/name
-func (ca *CA) SignCertificate(baseDir, name string, ous, sans []string, pub *ecdsa.PublicKey,
+func (ca *CA) SignCertificate(baseDir, name string, ous, sans []string, pub interface{},
 	ku x509.KeyUsage, eku []x509.ExtKeyUsage) (*x509.Certificate, error) {
 
 	template := x509Template()
@@ -187,7 +186,7 @@ func x509Template() x509.Certificate {
 }
 
 // generate a signed X509 certificate using ECDSA
-func genCertificateECDSA(baseDir, name string, template, parent *x509.Certificate, pub *ecdsa.PublicKey,
+func genCertificateECDSA(baseDir, name string, template, parent *x509.Certificate, pub interface{},
 	priv interface{}) (*x509.Certificate, error) {
 
 	//create the x509 public cert
@@ -228,7 +227,7 @@ func LoadCertificateECDSA(certPath string) (*x509.Certificate, error) {
 				return err
 			}
 			block, _ := pem.Decode(rawCert)
-			cert, err = utils.DERToX509Certificate(block.Bytes)
+			cert, err = x509.ParseCertificate(block.Bytes)
 		}
 		return nil
 	}

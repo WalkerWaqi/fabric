@@ -8,7 +8,8 @@ package msp
 
 import (
 	"bytes"
-	"crypto/x509"
+
+	"github.com/flyinox/crypto/x509"
 
 	"time"
 
