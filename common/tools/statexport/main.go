@@ -25,7 +25,7 @@ func main() {
 			break
 		}
 		vkv := queryResult.(*statedb.VersionedKV)
-		key := bytes.ReplaceAll([]byte(vkv.Key), []byte{0}, []byte{32})
+		key := bytes.ReplaceAll(bytes.Trim([]byte(vkv.Key), "\x00"), []byte{0}, []byte{95})
 		res, _ := simplejson.NewJson(vkv.Value)
 		kv[string(key)] = res
 	}
