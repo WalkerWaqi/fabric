@@ -101,69 +101,12 @@ func TestSavepoint(t *testing.T) {
 
 func TestHistory(t *testing.T) {
 	env := newTestHistoryEnv(t)
-	defer env.cleanup()
+	// defer env.cleanup()
 	provider := env.testBlockStorageEnv.provider
 	ledger1id := "ledger1"
 	store1, err := provider.OpenBlockStore(ledger1id)
 	testutil.AssertNoError(t, err, "Error upon provider.OpenBlockStore()")
 	defer store1.Shutdown()
-
-	bg, gb := testutil.NewBlockGenerator(t, ledger1id, false)
-	testutil.AssertNoError(t, store1.AddBlock(gb), "")
-	testutil.AssertNoError(t, env.testHistoryDB.Commit(gb), "")
-
-	//block1
-	txid := util2.GenerateUUID()
-	simulator, _ := env.txmgr.NewTxSimulator(txid)
-	value1 := []byte("value1")
-	simulator.SetState("ns1", "key7", value1)
-	simulator.Done()
-	simRes, _ := simulator.GetTxSimulationResults()
-	pubSimResBytes, _ := simRes.GetPubSimulationBytes()
-	block1 := bg.NextBlock([][]byte{pubSimResBytes})
-	err = store1.AddBlock(block1)
-	testutil.AssertNoError(t, err, "")
-	err = env.testHistoryDB.Commit(block1)
-	testutil.AssertNoError(t, err, "")
-
-	//block2 tran1
-	simulationResults := [][]byte{}
-	txid = util2.GenerateUUID()
-	simulator, _ = env.txmgr.NewTxSimulator(txid)
-	value2 := []byte("value2")
-	simulator.SetState("ns1", "key7", value2)
-	simulator.Done()
-	simRes, _ = simulator.GetTxSimulationResults()
-	pubSimResBytes, _ = simRes.GetPubSimulationBytes()
-	simulationResults = append(simulationResults, pubSimResBytes)
-	//block2 tran2
-	txid2 := util2.GenerateUUID()
-	simulator2, _ := env.txmgr.NewTxSimulator(txid2)
-	value3 := []byte("value3")
-	simulator2.SetState("ns1", "key7", value3)
-	simulator2.Done()
-	simRes2, _ := simulator2.GetTxSimulationResults()
-	pubSimResBytes2, _ := simRes2.GetPubSimulationBytes()
-	simulationResults = append(simulationResults, pubSimResBytes2)
-	block2 := bg.NextBlock(simulationResults)
-	err = store1.AddBlock(block2)
-	testutil.AssertNoError(t, err, "")
-	err = env.testHistoryDB.Commit(block2)
-	testutil.AssertNoError(t, err, "")
-
-	//block3
-	txid = util2.GenerateUUID()
-	simulator, _ = env.txmgr.NewTxSimulator(txid)
-	simulator.DeleteState("ns1", "key7")
-	simulator.Done()
-	simRes, _ = simulator.GetTxSimulationResults()
-	pubSimResBytes, _ = simRes.GetPubSimulationBytes()
-	block3 := bg.NextBlock([][]byte{pubSimResBytes})
-	err = store1.AddBlock(block3)
-	testutil.AssertNoError(t, err, "")
-	err = env.testHistoryDB.Commit(block3)
-	testutil.AssertNoError(t, err, "")
-	t.Logf("Inserted all 3 blocks")
 
 	qhistory, err := env.testHistoryDB.NewHistoryQueryExecutor(store1)
 	testutil.AssertNoError(t, err, "Error upon NewHistoryQueryExecutor")
@@ -177,7 +120,7 @@ func TestHistory(t *testing.T) {
 		if kmod == nil {
 			break
 		}
-		txid = kmod.(*queryresult.KeyModification).TxId
+		txid := kmod.(*queryresult.KeyModification).TxId
 		retrievedValue := kmod.(*queryresult.KeyModification).Value
 		retrievedTimestamp := kmod.(*queryresult.KeyModification).Timestamp
 		retrievedIsDelete := kmod.(*queryresult.KeyModification).IsDelete
